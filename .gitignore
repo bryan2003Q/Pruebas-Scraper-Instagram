@@ -1,0 +1,16 @@
+# Seguridad (¡No subir!)
+.env
+
+# Datos extraídos
+seguidores.csv
+
+# Archivos temporales de Python
+__pycache__/
+*.pyc
+
+# Entorno virtual local
+venv/
+.venv/
+
+# Cache de Scrapy
+.scrapy/
