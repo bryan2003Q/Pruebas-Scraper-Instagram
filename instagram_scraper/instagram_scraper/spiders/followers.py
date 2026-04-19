@@ -3,6 +3,10 @@ from scrapy_playwright.page import PageMethod
 import json
 import asyncio
 import random
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class FollowersSpider(scrapy.Spider):
     name = "followers"
@@ -18,11 +22,11 @@ class FollowersSpider(scrapy.Spider):
         },
     }
     
-    # --- TUS DATOS ---
-    mi_usuario = "ax_count"
-    mi_contrasena = "sisdark23"
-    usuario_objetivo = "daniuselgato.gg"
-    limite_seguidores = 20 
+    # --- TUS DATOS (Cargados desde .env) ---
+    mi_usuario = os.getenv("INSTAGRAM_USER")
+    mi_contrasena = os.getenv("INSTAGRAM_PASSWORD")
+    usuario_objetivo = os.getenv("TARGET_USER")
+    limite_seguidores = int(os.getenv("FOLLOWERS_LIMIT", 20))
 
     def start_requests(self):
         self.logger.info("🚀 Iniciando Proyecto con Scroll Inteligente...")
