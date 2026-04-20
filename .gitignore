@@ -2,7 +2,7 @@
 .env
 
 # Datos extraídos
-seguidores.csv
+*.csv
 
 # Archivos temporales de Python
 __pycache__/
