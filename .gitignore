@@ -1,8 +1,6 @@
 # Seguridad (¡No subir!)
 .env
 
-# Datos extraídos
-seguidores.csv
 
 # Archivos temporales de Python
 __pycache__/

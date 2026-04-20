@@ -14,9 +14,9 @@ class FollowersSpider(scrapy.Spider):
     # --- CONFIGURACIÓN DE EXPORTACIÓN ---
     custom_settings = {
         'FEEDS': {
-            'seguidores.csv': {
+            'extracción_de_datos_%(time)s.csv': {
                 'format': 'csv',
-                'overwrite': True,
+                'overwrite': False,
                 'fields': ['Username', 'Name', 'Biography', 'Followers', 'Following'],
             },
         },
@@ -26,10 +26,10 @@ class FollowersSpider(scrapy.Spider):
     mi_usuario = os.getenv("INSTAGRAM_USER")
     mi_contrasena = os.getenv("INSTAGRAM_PASSWORD")
     usuario_objetivo = os.getenv("TARGET_USER")
-    limite_seguidores = int(os.getenv("FOLLOWERS_LIMIT", 20))
+    limite_seguidores = int(os.getenv("FOLLOWERS_LIMIT"))
 
     def start_requests(self):
-        self.logger.info("🚀 Iniciando Proyecto con Scroll Inteligente...")
+        self.logger.info(" Iniciando Proyecto con Scroll Inteligente...")
         yield scrapy.Request(
             url="https://www.instagram.com/accounts/login/",
             meta={
@@ -54,12 +54,12 @@ class FollowersSpider(scrapy.Spider):
             
             # 2. VERIFICACIÓN
             await page.wait_for_selector("svg[aria-label='Inicio'], svg[aria-label='Home'], a[href='/']", timeout=20000)
-            self.logger.info("✅ Login exitoso.")
+            self.logger.info(" Login exitoso.")
 
             # 3. IR AL PERFIL Y ABRIR MODAL
             await page.goto(f"https://www.instagram.com/{self.usuario_objetivo}/")
             await page.wait_for_selector("header")
-            await page.click(f"a[href='/{self.usuario_objetivo}/followers/']")
+            await page.click(f"a[href='/{self.usuario_objetivo}/following/']")
             await page.wait_for_selector("div[role='dialog']")
             await asyncio.sleep(2)
 
@@ -67,7 +67,7 @@ class FollowersSpider(scrapy.Spider):
             encontrados = set()
             intentos_sin_progreso = 0
             
-            self.logger.info(f"🚀 Iniciando extracción con scroll inteligente (Objetivo: {self.limite_seguidores})")
+            self.logger.info(f" Iniciando extracción con scroll inteligente (Objetivo: {self.limite_seguidores})")
             
             while len(encontrados) < self.limite_seguidores and intentos_sin_progreso < 10:
                 conteo_inicial = len(encontrados)
@@ -124,11 +124,11 @@ class FollowersSpider(scrapy.Spider):
                 await asyncio.sleep(random.uniform(1.5, 2.5))
 
             lista_final = list(encontrados)
-            self.logger.info(f"✨ Fase 1 Completada. Detallando {len(lista_final)} usuarios...")
+            self.logger.info(f" Fase 1 Completada. Detallando {len(lista_final)} usuarios...")
 
             # 5. FASE 2: OBTENER DETALLES DE CADA UNO
             for user in lista_final:
-                self.logger.info(f"🔍 Extrayendo datos de: {user}")
+                self.logger.info(f" Extrayendo datos de: {user}")
                 api_url = f"https://www.instagram.com/api/v1/users/web_profile_info/?username={user}"
                 
                 try:
@@ -150,14 +150,14 @@ class FollowersSpider(scrapy.Spider):
                         'Following': u.get('edge_follow', {}).get('count', 0)
                     }
                 except Exception:
-                    self.logger.warning(f"⚠️ Salteando {user} (perfil privado o error)")
+                    self.logger.warning(f" Salteando {user} (perfil privado o error)")
                     yield {'Username': user, 'Name': 'N/A'}
                 
                 await asyncio.sleep(random.uniform(2, 4))
 
-            self.logger.info("🏁 ¡Proceso completado! Archivo: seguidores.csv")
+            self.logger.info(" ¡Proceso completado!")
 
         except Exception as e:
-            self.logger.error(f"❌ Error General: {str(e)}")
+            self.logger.error(f" Error General: {str(e)}")
         finally:
             await page.close()
