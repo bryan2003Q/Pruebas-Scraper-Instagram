@@ -54,7 +54,6 @@ class InstagramPostsSpider(scrapy.Spider):
         page = response.meta["playwright_page"]
         
         try:
-            # 1. INYECTAR COOKIES
             self.logger.info(" Inyectando cookies para la sesión de posts...")
             cookies = [
                 {'name': 'sessionid', 'value': self.session_id, 'domain': '.instagram.com', 'path': '/'},
@@ -63,53 +62,41 @@ class InstagramPostsSpider(scrapy.Spider):
             ]
             await page.context.add_cookies(cookies)
             
-            # 2. NAVIGATE TO PROFILE
             self.logger.info(f" Navegando al perfil de {self.target_user}...")
             await page.goto(f"https://www.instagram.com/{self.target_user}/")
             
-            # 3. VERIFICATION
             try:
                 await page.wait_for_selector("svg[aria-label='Inicio'], svg[aria-label='Home'], a[href='/']", timeout=15000)
                 self.logger.info(" Sesión validada correctamente.")
             except:
                 self.logger.warning(" No se pudo verificar la sesión. Asegúrate de que las cookies en .env sean vigentes.")
             
-            # Wait for profile header to load
             await page.wait_for_selector("header")
             self.logger.info(f" Perfil de {self.target_user} cargado. Listo para extraer posts.")
             
-            # 4. PHASE 2: IDENTIFY AND CLICK FIRST POST
             self.logger.info(" Buscando publicaciones en el perfil...")
             
-            # Wait for at least one post to be visible
             await page.wait_for_selector("a[href*='/p/']", timeout=10000)
             
-            # Get list of all post elements in the grid
             post_elements = await page.query_selector_all("a[href*='/p/']")
             
             if post_elements:
                 self.logger.info(f" Se detectaron {len(post_elements)} publicaciones visibles.")
                 
-                # --- LOOP TO EXTRACT MULTIPLE POSTS ---
                 for post_index in range(self.posts_limit):
                     self.logger.info(f" \n>>> PROCESANDO PUBLICACIÓN {post_index + 1} DE {self.posts_limit} <<<")
                     
                     if post_index == 0:
-                        # Open the first post
                         await page.evaluate("el => el.click()", post_elements[0])
                     else:
-                        # Navegar a la siguiente publicación usando el botón "Siguiente" del modal
                         try:
-                            # Selector para el botón "Siguiente" (funciona para español e inglés)
                             next_button_selector = " button:has(svg[aria-label='Next']), ._aaqg button"
                             await page.click(next_button_selector, timeout=8000)
-                            # Esperamos a que el contenido cambie y se estabilice
                             await asyncio.sleep(4)
                         except Exception as e:
                             self.logger.warning(f" No se pudo navegar a la siguiente publicación: {e}")
                             break
 
-                    # Wait for post modal (pop-up) to appear
                     try:
                         await page.wait_for_selector("article[role='presentation']", timeout=15000)
                         self.logger.info(f" Publicación {post_index + 1} abierta con éxito.")
@@ -117,13 +104,10 @@ class InstagramPostsSpider(scrapy.Spider):
                         self.logger.warning(f" El modal de la publicación {post_index + 1} no cargó a tiempo.")
                         continue
                     
-                    # Pausa para estabilizar la carga del contenido y comentarios
                     await asyncio.sleep(3)
 
-                    # 5. PHASE 3: DATA EXTRACTION
                     self.logger.info(" Extrayendo datos de la publicación...")
                     
-                    # Extract AUTHOR
                     try:
                         post_author = await page.inner_text("article header h2 a, article header a")
                         post_author = post_author.split('\n')[0].strip()
@@ -134,19 +118,16 @@ class InstagramPostsSpider(scrapy.Spider):
                         self.logger.warning(f" Error al extraer autor: {e}")
                         post_author = self.target_user
 
-                    # Extraer el POSTEO (Caption)
                     try:
                         caption_text = await page.inner_text("article h1, article span._ap3a")
                         self.logger.info(f" [Posteo] {caption_text[:50]}...")
                     except:
                         caption_text = "No se pudo extraer el posteo principal"
 
-                    # Extraer ME GUSTA (Likes) de la publicación
                     try:
                         likes_selector = "article section a[href*='/liked_by/'], article section span:has-text('me gusta'), article section span:has-text('likes'), article section span.x1vvkbs"
                         raw_likes = await page.inner_text(likes_selector, timeout=5000)
                         
-                        # Extraer solo el número (ej: "4,580")
                         match = re.search(r'([\d\.,]+)', raw_likes)
                         likes_text = match.group(1) if match else "0"
                         
@@ -154,7 +135,6 @@ class InstagramPostsSpider(scrapy.Spider):
                     except:
                         likes_text = "0"
 
-                    # --- GUARDAR EN EL CSV (POST ORIGINAL) ---
                     yield {
                         'Post_URL': page.url,
                         'Caption': caption_text.replace('\n', ' ').strip(),
@@ -162,7 +142,6 @@ class InstagramPostsSpider(scrapy.Spider):
                         'Likes': likes_text
                     }
 
-                    # --- EXTRACT AND SAVE COMMENTS ---
                     try:
                         self.logger.info(f" Extrayendo hasta {self.comments_limit} comentarios...")
                         comments_data = await page.evaluate(f"""(limit) => {{
@@ -174,7 +153,6 @@ class InstagramPostsSpider(scrapy.Spider):
                                 const author_link = Array.from(comment_element.querySelectorAll('a')).find(a => a.innerText.trim().length > 0);
                                 const comment_text_element = comment_element.querySelector('span._ap3a');
                                 
-                                // Extract comment likes
                                 let comment_likes_count = "0";
                                 const likes_button = comment_element.querySelector('button._a9ze');
                                 if (likes_button) {{

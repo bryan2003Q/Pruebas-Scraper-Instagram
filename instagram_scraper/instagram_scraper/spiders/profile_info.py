@@ -52,7 +52,7 @@ class ProfileInfoSpider(scrapy.Spider):
         page = response.meta["playwright_page"]
         
         try:
-            # 1. LOGIN MEDIANTE INYECCIÓN DE COOKIES
+            # LOGIN MEDIANTE INYECCIÓN DE COOKIES
             self.logger.info("Inyectando cookies de sesión...")
             cookies = [
                 {'name': 'sessionid', 'value': self.session_id, 'domain': '.instagram.com', 'path': '/'},
@@ -62,19 +62,18 @@ class ProfileInfoSpider(scrapy.Spider):
 
             await page.context.add_cookies(cookies)
 
-            # 2. NAVIGATE TO TARGET PROFILE
+             # NAVIGATE TO TARGET PROFILE
             self.logger.info(f"Navegando al perfil de {self.target_user}...")
             await page.goto(f"https://www.instagram.com/{self.target_user}/")
             
             try:
-                # Esperar a que la cabecera del perfil cargue para asegurar que la página está lista
+                
                 await page.wait_for_selector("header", timeout=15000)
                 self.logger.info(f"Perfil de {self.target_user} cargado correctamente.")
             except:
                 self.logger.error("No se pudo cargar el perfil. Verifique las cookies o el nombre de usuario.")
                 return
 
-            # 3. EXTRAER DATOS USANDO LA API INTERNA (Basado en la lógica de followers.py)
             api_url = f"https://www.instagram.com/api/v1/users/web_profile_info/?username={self.target_user}"
             
             self.logger.info("Consultando API interna para obtener detalles...")
