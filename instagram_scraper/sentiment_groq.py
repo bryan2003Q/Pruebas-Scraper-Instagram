@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import datetime
 from dotenv import load_dotenv
 from groq import Groq
 
@@ -88,7 +89,9 @@ Sé conciso y directo en tu análisis.
         print(conclusion)
         
         
-        output_path = json_path.replace('.json', '_conclusion_groq.txt')
+        timestamp = datetime.datetime.now().strftime("%H-%M-%S")
+        dirname = os.path.dirname(json_path)
+        output_path = os.path.join(dirname, f"conclusion_groq_{timestamp}.txt")
         with open(output_path, 'w', encoding='utf-8') as out_f:
             out_f.write("=== ANÁLISIS DE SENTIMIENTOS (GROQ) ===\n\n")
             out_f.write(conclusion)
