@@ -2,9 +2,9 @@ import scrapy
 from scrapy_playwright.page import PageMethod
 import json
 import asyncio
-import random
 import os
 import re
+import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,23 +12,26 @@ load_dotenv()
 class InstagramPostsSpider(scrapy.Spider):
     name = "instagram_posts"
     
-    # --- CONFIGURACIÓN DE EXPORTACIÓN ---
+    # --- EXPORT CONFIGURATION ---
+    # We generate a readable timestamp: Day_Month_Year_Hour-Minutes-Seconds
+    timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H-%M-%S")
+    
     custom_settings = {
         'FEEDS': {
-            'posts_de_instagram_%(time)s.csv': {
-                'format': 'csv',
+            f'resultados/posts_de_instagram_{timestamp}.json': {
+                'format': 'json',
                 'overwrite': False,
                 'fields': ['Post_URL', 'Caption', 'Post_Author', 'Likes'],
             },
         },
     }
     
-    # --- DATOS DEL .ENV ---
-    usuario_objetivo = os.getenv("TARGET_USER")
-    limite_posts = int(os.getenv("POSTS_LIMIT", 10))
-    limite_comentarios = int(os.getenv("COMMENTS_LIMIT", 5))
+    # --- TARGET DATA FROM .ENV ---
+    target_user = os.getenv("TARGET_USER")
+    posts_limit = int(os.getenv("POSTS_LIMIT", 10))
+    comments_limit = int(os.getenv("COMMENTS_LIMIT", 5))
     
-    # Cookies
+    # Cookies for Authentication
     session_id = os.getenv("INSTAGRAM_SESSION_ID")
     user_id_cookie = os.getenv("INSTAGRAM_USER_ID")
     csrf_token = os.getenv("INSTAGRAM_CSRF_TOKEN")
@@ -60,40 +63,40 @@ class InstagramPostsSpider(scrapy.Spider):
             ]
             await page.context.add_cookies(cookies)
             
-            # 2. IR AL PERFIL
-            self.logger.info(f" Navegando al perfil de {self.usuario_objetivo}...")
-            await page.goto(f"https://www.instagram.com/{self.usuario_objetivo}/")
+            # 2. NAVIGATE TO PROFILE
+            self.logger.info(f" Navegando al perfil de {self.target_user}...")
+            await page.goto(f"https://www.instagram.com/{self.target_user}/")
             
-            # 3. VERIFICACIÓN
+            # 3. VERIFICATION
             try:
                 await page.wait_for_selector("svg[aria-label='Inicio'], svg[aria-label='Home'], a[href='/']", timeout=15000)
                 self.logger.info(" Sesión validada correctamente.")
             except:
                 self.logger.warning(" No se pudo verificar la sesión. Asegúrate de que las cookies en .env sean vigentes.")
             
-            # Esperar a que cargue el contenido del perfil
+            # Wait for profile header to load
             await page.wait_for_selector("header")
-            self.logger.info(f" Perfil de {self.usuario_objetivo} cargado. Listo para extraer posts.")
+            self.logger.info(f" Perfil de {self.target_user} cargado. Listo para extraer posts.")
             
-            # 4. FASE 2: IDENTIFICAR Y HACER CLIC EN EL PRIMER POST
+            # 4. PHASE 2: IDENTIFY AND CLICK FIRST POST
             self.logger.info(" Buscando publicaciones en el perfil...")
             
-            # Esperamos a que al menos una publicación sea visible
+            # Wait for at least one post to be visible
             await page.wait_for_selector("a[href*='/p/']", timeout=10000)
             
-            # Obtenemos la lista de todos los posts cargados en la cuadrícula
-            posts = await page.query_selector_all("a[href*='/p/']")
+            # Get list of all post elements in the grid
+            post_elements = await page.query_selector_all("a[href*='/p/']")
             
-            if posts:
-                self.logger.info(f" Se detectaron {len(posts)} publicaciones visibles.")
+            if post_elements:
+                self.logger.info(f" Se detectaron {len(post_elements)} publicaciones visibles.")
                 
-                # --- BUCLE PARA EXTRAER MÚLTIPLES POSTS (Definido por POSTS_LIMIT en .env) ---
-                for i in range(self.limite_posts):
-                    self.logger.info(f" \n>>> PROCESANDO PUBLICACIÓN {i+1} DE {self.limite_posts} <<<")
+                # --- LOOP TO EXTRACT MULTIPLE POSTS ---
+                for post_index in range(self.posts_limit):
+                    self.logger.info(f" \n>>> PROCESANDO PUBLICACIÓN {post_index + 1} DE {self.posts_limit} <<<")
                     
-                    if i == 0:
-                        # Abrir la primera publicación
-                        await page.evaluate("el => el.click()", posts[0])
+                    if post_index == 0:
+                        # Open the first post
+                        await page.evaluate("el => el.click()", post_elements[0])
                     else:
                         # Navegar a la siguiente publicación usando el botón "Siguiente" del modal
                         try:
@@ -106,30 +109,30 @@ class InstagramPostsSpider(scrapy.Spider):
                             self.logger.warning(f" No se pudo navegar a la siguiente publicación: {e}")
                             break
 
-                    # Esperamos a que aparezca el modal (el \"pop-up\") del post
+                    # Wait for post modal (pop-up) to appear
                     try:
                         await page.wait_for_selector("article[role='presentation']", timeout=15000)
-                        self.logger.info(f" Publicación {i+1} abierta con éxito.")
+                        self.logger.info(f" Publicación {post_index + 1} abierta con éxito.")
                     except:
-                        self.logger.warning(f" El modal de la publicación {i+1} no cargó a tiempo.")
+                        self.logger.warning(f" El modal de la publicación {post_index + 1} no cargó a tiempo.")
                         continue
                     
                     # Pausa para estabilizar la carga del contenido y comentarios
                     await asyncio.sleep(3)
 
-                    # 5. FASE 3: EXTRAER DATOS
+                    # 5. PHASE 3: DATA EXTRACTION
                     self.logger.info(" Extrayendo datos de la publicación...")
                     
-                    # Extraer el AUTOR
+                    # Extract AUTHOR
                     try:
                         post_author = await page.inner_text("article header h2 a, article header a")
                         post_author = post_author.split('\n')[0].strip()
                         if not post_author:
-                            post_author = self.usuario_objetivo
+                            post_author = self.target_user
                         self.logger.info(f" [Autor] {post_author}")
                     except Exception as e:
                         self.logger.warning(f" Error al extraer autor: {e}")
-                        post_author = self.usuario_objetivo
+                        post_author = self.target_user
 
                     # Extraer el POSTEO (Caption)
                     try:
@@ -159,45 +162,44 @@ class InstagramPostsSpider(scrapy.Spider):
                         'Likes': likes_text
                     }
 
-                    # --- EXTRAER Y GUARDAR COMENTARIOS ---
+                    # --- EXTRACT AND SAVE COMMENTS ---
                     try:
-                        self.logger.info(f" Extrayendo hasta {self.limite_comentarios} comentarios...")
+                        self.logger.info(f" Extrayendo hasta {self.comments_limit} comentarios...")
                         comments_data = await page.evaluate(f"""(limit) => {{
-                            const items = Array.from(document.querySelectorAll('article ul li'));
-                            const results = [];
-                            for (let i = 1; i < items.length; i++) {{
-                                if (results.length >= limit) break;
-                                const li = items[i];
-                                const link = Array.from(li.querySelectorAll('a')).find(a => a.innerText.trim().length > 0);
-                                const text = li.querySelector('span._ap3a');
+                            const comment_items = Array.from(document.querySelectorAll('article ul li'));
+                            const extracted_comments = [];
+                            for (let i = 1; i < comment_items.length; i++) {{
+                                if (extracted_comments.length >= limit) break;
+                                const comment_element = comment_items[i];
+                                const author_link = Array.from(comment_element.querySelectorAll('a')).find(a => a.innerText.trim().length > 0);
+                                const comment_text_element = comment_element.querySelector('span._ap3a');
                                 
-                                // Extraer likes del comentario
-                                let cLikes = "0";
-                                const likesBtn = li.querySelector('button._a9ze');
-                                if (likesBtn) {{
-                                    const btnText = likesBtn.innerText.trim();
-                                    // Usar regex para extraer solo el número
-                                    const match = btnText.match(/([\d\.,]+)/);
-                                    cLikes = match ? match[1] : "0";
+                                // Extract comment likes
+                                let comment_likes_count = "0";
+                                const likes_button = comment_element.querySelector('button._a9ze');
+                                if (likes_button) {{
+                                    const button_text = likes_button.innerText.trim();
+                                    const match = button_text.match(/([\d\.,]+)/);
+                                    comment_likes_count = match ? match[1] : "0";
                                 }}
-
-                                if (link && text) {{
-                                    results.push({{
-                                        user: link.innerText.trim().split('\\n')[0],
-                                        text: text.innerText.trim(),
-                                        likes: cLikes
+                                
+                                if (author_link && comment_text_element) {{
+                                    extracted_comments.push({{
+                                        user: author_link.innerText.trim().split('\\n')[0],
+                                        text: comment_text_element.innerText.trim(),
+                                        likes: comment_likes_count
                                     }});
                                 }}
                             }}
-                            return results;
-                        }}""", self.limite_comentarios)
+                            return extracted_comments;
+                        }}""", self.comments_limit)
 
-                        for idx, c in enumerate(comments_data, 1):
+                        for comment_index, comment in enumerate(comments_data, 1):
                             yield {
                                 'Post_URL': page.url,
-                                'Caption': c['text'].replace('\n', ' ').strip(),
-                                'Post_Author': c['user'],
-                                'Likes': c.get('likes', '0')
+                                'Caption': comment['text'].replace('\n', ' ').strip(),
+                                'Post_Author': comment['user'],
+                                'Likes': comment.get('likes', '0')
                             }
                         
                         if not comments_data:
@@ -217,32 +219,3 @@ class InstagramPostsSpider(scrapy.Spider):
             await asyncio.sleep(2)
             await page.close()
 
-    def closed(self, reason):
-        """Este método se ejecuta automáticamente cuando el spider termina"""
-        import glob
-        import subprocess
-        import sys
-        
-        self.logger.info("🤖 Iniciando integración con análisis de sentimientos...")
-        try:
-            # Buscar el archivo CSV más reciente
-            list_of_files = glob.glob('posts_de_instagram_*.csv')
-            if not list_of_files:
-                self.logger.warning("No se encontró ningún archivo CSV para analizar.")
-                return
-                
-            latest_file = max(list_of_files, key=os.path.getctime)
-            self.logger.info(f"📂 Archivo a analizar: {latest_file}")
-            
-            # Ruta relativa al script asumiendo que se ejecuta desde la raíz de instagram_scraper
-            script_path = os.path.join(os.getcwd(), 'sentiment_huggin_face.py')
-            
-            if os.path.exists(script_path):
-                # Lanzar en un proceso separado para que la consola muestre su progreso
-                self.logger.info("🚀 Lanzando análisis... Revisa la consola para ver el progreso.")
-                subprocess.Popen([sys.executable, script_path, latest_file])
-            else:
-                self.logger.error(f"No se encontró el script en: {script_path}")
-                
-        except Exception as e:
-            self.logger.error(f"Error al iniciar el análisis automático: {e}")

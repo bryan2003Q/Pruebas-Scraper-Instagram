@@ -4,6 +4,7 @@ import json
 import asyncio
 import random
 import os
+import datetime
 from dotenv import load_dotenv
 
 # Cargar variables de entorno
@@ -12,25 +13,29 @@ load_dotenv()
 class ProfileInfoSpider(scrapy.Spider):
     name = "profile_info"
     
-    # --- CONFIGURACIÓN DE EXPORTACIÓN ---
+    # --- EXPORT CONFIGURATION ---
+
+    timestamp = datetime.datetime.now().strftime("%d_%m_%Y_%H-%M-%S")
+
+    
     custom_settings = {
         'FEEDS': {
-            'perfil_info_%(time)s.csv': {
-                'format': 'csv',
+            f'resultados/perfil_info_{timestamp}.json': {
+                'format': 'json',
                 'overwrite': False,
                 'fields': ['Username', 'Name', 'Biography', 'Followers', 'Following'],
             },
         },
     }
     
-    # --- DATOS (Cargados desde .env) ---
-    usuario_objetivo = os.getenv("TARGET_USER")
+    # --- DATA FROM .ENV ---
+    target_user = os.getenv("TARGET_USER")
     session_id = os.getenv("INSTAGRAM_SESSION_ID")
     user_id_cookie = os.getenv("INSTAGRAM_USER_ID")
     csrf_token = os.getenv("INSTAGRAM_CSRF_TOKEN")
 
     def start_requests(self):
-        self.logger.info(f" Iniciando extracción de información de perfil para: {self.usuario_objetivo}")
+        self.logger.info(f" Iniciando extracción de información de perfil para: {self.target_user}")
         yield scrapy.Request(
             url="https://www.instagram.com/",
             meta={
@@ -57,20 +62,20 @@ class ProfileInfoSpider(scrapy.Spider):
 
             await page.context.add_cookies(cookies)
 
-            # 2. IR AL PERFIL OBJETIVO
-            self.logger.info(f"Navegando al perfil de {self.usuario_objetivo}...")
-            await page.goto(f"https://www.instagram.com/{self.usuario_objetivo}/")
+            # 2. NAVIGATE TO TARGET PROFILE
+            self.logger.info(f"Navegando al perfil de {self.target_user}...")
+            await page.goto(f"https://www.instagram.com/{self.target_user}/")
             
             try:
                 # Esperar a que la cabecera del perfil cargue para asegurar que la página está lista
                 await page.wait_for_selector("header", timeout=15000)
-                self.logger.info(f"Perfil de {self.usuario_objetivo} cargado correctamente.")
+                self.logger.info(f"Perfil de {self.target_user} cargado correctamente.")
             except:
                 self.logger.error("No se pudo cargar el perfil. Verifique las cookies o el nombre de usuario.")
                 return
 
             # 3. EXTRAER DATOS USANDO LA API INTERNA (Basado en la lógica de followers.py)
-            api_url = f"https://www.instagram.com/api/v1/users/web_profile_info/?username={self.usuario_objetivo}"
+            api_url = f"https://www.instagram.com/api/v1/users/web_profile_info/?username={self.target_user}"
             
             self.logger.info("Consultando API interna para obtener detalles...")
             profile_data = await page.evaluate(f"""
@@ -85,13 +90,13 @@ class ProfileInfoSpider(scrapy.Spider):
             if profile_data and 'data' in profile_data and profile_data['data']['user']:
                 u = profile_data['data']['user']
                 yield {
-                    'Username': self.usuario_objetivo,
+                    'Username': self.target_user,
                     'Name': u.get('full_name', ''),
                     'Biography': u.get('biography', '').replace('\n', ' '),
                     'Followers': u.get('edge_followed_by', {}).get('count', 0),
                     'Following': u.get('edge_follow', {}).get('count', 0)
                 }
-                self.logger.info(f"✓ Información de {self.usuario_objetivo} extraída con éxito.")
+                self.logger.info(f"✓ Información de {self.target_user} extraída con éxito.")
             else:
                 self.logger.error("No se pudieron obtener los datos de la API. Es posible que el perfil sea privado o la sesión haya expirado.")
 
