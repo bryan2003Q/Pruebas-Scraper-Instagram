@@ -56,7 +56,7 @@ Para ejecutar este proyecto necesitas:
    ```
 4. Para realizar el análisis de sentimientos utilizando Groq, ejecuta el siguiente script pasando un archivo de publicaciones:
    ```bash
-   python personality_groq.py resultados/posts_de_instagram_TU_ARCHIVO.json
+   python personality_groq.py resultados/posts_de_instagram_24_04_2026_18-38-34.json
    ```
 
 Los datos extraídos y las conclusiones de la IA se almacenarán ordenadamente en la carpeta `instagram_scraper/resultados/`.
