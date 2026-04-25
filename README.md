@@ -22,7 +22,7 @@ Scrapeo_Instagram/
 ├── requirements.txt         # Librerías necesarias (Scrapy, Playwright, Dotenv, Groq).
 └── instagram_scraper/       
     ├── resultados/          # Carpeta generada automáticamente para los archivos JSON y conclusiones.
-    ├── sentiment_groq.py    # Script de Inteligencia Artificial para análisis de sentimiento con Llama 3.
+    ├── personality_groq.py    # Script de Inteligencia Artificial para análisis de sentimiento con Llama 3.
     └── instagram_scraper/
         ├── spiders/
         │   ├── followers.py        # Crawler y lógica de extracción de seguidores.
@@ -56,7 +56,7 @@ Para ejecutar este proyecto necesitas:
    ```
 4. Para realizar el análisis de sentimientos utilizando Groq, ejecuta el siguiente script pasando un archivo de publicaciones:
    ```bash
-   python sentiment_groq.py resultados/posts_de_instagram_TU_ARCHIVO.json
+   python personality_groq.py resultados/posts_de_instagram_TU_ARCHIVO.json
    ```
 
 Los datos extraídos y las conclusiones de la IA se almacenarán ordenadamente en la carpeta `instagram_scraper/resultados/`.
