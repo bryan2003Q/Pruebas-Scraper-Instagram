@@ -50,7 +50,7 @@ Para ejecutar este proyecto necesitas:
 2. Crea tu archivo `.env` basándote en la configuración de seguridad explicada.
 3. Ejecuta el spider que necesites (dentro de la carpeta `instagram_scraper`):
    ```bash
-   scrapy crawl followers
+  
    scrapy crawl profile_info
    scrapy crawl instagram_posts
    ```
