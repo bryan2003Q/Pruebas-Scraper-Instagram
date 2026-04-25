@@ -28,10 +28,14 @@ class FollowersSpider(scrapy.Spider):
     usuario_objetivo = os.getenv("TARGET_USER")
     limite_seguidores = int(os.getenv("FOLLOWERS_LIMIT"))
 
+    session_id = os.getenv("INSTAGRAM_SESSION_ID")
+    user_id_cookie = os.getenv("INSTAGRAM_USER_ID")
+    csrf_token = os.getenv("INSTAGRAM_CSRF_TOKEN")
+
     def start_requests(self):
-        self.logger.info(" Iniciando Proyecto con Scroll Inteligente...")
+        self.logger.info(" Iniciando Proyecto con Cookies y Scroll Inteligente...")
         yield scrapy.Request(
-            url="https://www.instagram.com/accounts/login/",
+            url="https://www.instagram.com/",
             meta={
                 "playwright": True,
                 "playwright_include_page": True,
@@ -46,15 +50,26 @@ class FollowersSpider(scrapy.Spider):
         page = response.meta["playwright_page"]
         
         try:
-            # 1. LOGIN
-            await page.wait_for_selector("input[name='email']", timeout=15000)
-            await page.fill("input[name='email']", self.mi_usuario)
-            await page.fill("input[name='pass']", self.mi_contrasena)
-            await page.click("div[aria-label='Log in'], div[aria-label='Log In']")
-            
-            # 2. VERIFICACIÓN
-            await page.wait_for_selector("svg[aria-label='Inicio'], svg[aria-label='Home'], a[href='/']", timeout=20000)
-            self.logger.info(" Login exitoso.")
+            # 1. LOGIN MEDIANTE INYECCIÓN DE COOKIES
+            self.logger.info("Inyectando cookies de sesión")
+            cookies = [
+                {'name': 'sessionid', 'value': self.session_id, 'domain': '.instagram.com', 'path': '/'},
+                {'name': 'ds_user_id', 'value': self.user_id_cookie, 'domain': '.instagram.com', 'path': '/'},
+                {'name': 'csrftoken', 'value': self.csrf_token, 'domain': '.instagram.com', 'path': '/'},
+            ]
+
+            await page.context.add_cookies(cookies)
+
+            # Navegar directamente al perfil objetivo
+            await page.goto(f"https://www.instagram.com/{self.usuario_objetivo}/")
+
+            try:
+                # Verificar si el icono de Home aparece (señal de que estamos logueados)
+                await page.wait_for_selector("svg[aria-label='Inicio'], svg[aria-label='Home'], a[href='/']", timeout=15000)
+                self.logger.info(f" Autenticación exitosa. Entrando al perfil de {self.usuario_objetivo}...")
+            except:
+                self.logger.warning(" No se pudo validar la sesión. Se intentará continuar, pero es posible que las cookies hayan expirado.")
+           
 
             # 3. IR AL PERFIL Y ABRIR MODAL
             await page.goto(f"https://www.instagram.com/{self.usuario_objetivo}/")
